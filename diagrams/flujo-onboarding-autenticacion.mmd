@@ -1,0 +1,27 @@
+sequenceDiagram
+  actor C as Cliente
+  participant App as App React Native
+  participant IAM as CIAM OIDC
+  participant OB as Onboarding Service
+  participant KYC as Proveedor KYC + liveness
+  participant Core as Core / alta de cliente
+  participant DB as Estado onboarding + Outbox
+  C->>App: Inicia alta y acepta aviso de privacidad
+  App->>OB: Crear sesión de onboarding
+  OB->>DB: Estado PENDING + referencia
+  App->>KYC: Captura cifrada / SDK seguro
+  KYC-->>OB: Resultado, score y referencia (no plantilla biométrica)
+  OB->>OB: Reglas de fraude y revisión manual si ambiguo
+  alt Aprobado
+    OB->>Core: Alta idempotente de cliente/productos
+    Core-->>OB: CustomerRef
+    OB->>DB: Estado APPROVED + Outbox
+    OB-->>App: Enlace de activación
+    App->>IAM: Authorization Code + PKCE S256 en navegador del sistema
+    IAM-->>App: Código por deep link verificado
+    App->>IAM: Canjear código + code_verifier
+    IAM-->>App: Tokens OIDC; biometría local desbloquea passkey
+  else Rechazo o revisión
+    OB->>DB: REJECTED o MANUAL_REVIEW + motivo categorizado
+    OB-->>App: Estado y pasos de soporte, sin revelar señales antifraude
+  end

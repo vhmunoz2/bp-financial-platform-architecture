@@ -1,0 +1,24 @@
+flowchart LR
+  customer["Cliente<br/>Consulta, paga, transfiere"]
+  ops["Operaciones / Contact center<br/>Atención con permisos"]
+  soc["SOC / Seguridad<br/>Investiga eventos"]
+  subgraph bp["BP | Sistema de Banca Digital"]
+    sbi["SBI<br/>Canales digitales, operaciones y avisos"]
+  end
+  core["Core bancario<br/>Productos, movimientos y ledger autoritativo"]
+  detail["Sistema de perfil / KYC<br/>Datos detallados del cliente"]
+  idp["Proveedor IAM / CIAM<br/>OAuth 2.0 + OpenID Connect"]
+  face["Proveedor de identidad<br/>Documento, rostro y prueba de vida"]
+  rail["Red interbancaria<br/>Compensación y liquidación"]
+  push["FCM / APNs<br/>Notificación push"]
+  email["Proveedor Email / SMS<br/>Canales alternos"]
+  customer -->|"HTTPS: acceso, consulta y órdenes"| sbi
+  sbi -->|"OIDC: autenticación y MFA"| idp
+  sbi -->|"KYC: validación de identidad en onboarding"| face
+  sbi -->|"API privada autenticada: lectura y comandos"| core
+  sbi -->|"API privada autenticada: enriquecimiento de perfil"| detail
+  sbi -->|"API firmada, idempotente y conciliable"| rail
+  sbi -->|"Push: aviso de movimiento"| push
+  sbi -->|"Email/SMS: aviso alterno"| email
+  ops -->|"Consola de soporte con RBAC"| sbi
+  soc -->|"Alertas y trazas de seguridad"| sbi

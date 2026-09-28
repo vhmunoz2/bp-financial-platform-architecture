@@ -1,0 +1,31 @@
+sequenceDiagram
+  actor C as Cliente
+  participant Ch as SPA/App + BFF
+  participant AP as API Management
+  participant TS as Transfer Service
+  participant Core as Core ledger
+  participant Rail as Red interbancaria
+  participant DB as PostgreSQL + Outbox
+  participant SB as Service Bus
+  participant N as Notification Service
+  C->>Ch: Orden + step-up + Idempotency-Key
+  Ch->>AP: HTTPS, access token, request hash
+  AP->>TS: JWT audience/scope validado; correlationId
+  TS->>TS: Revalidar titularidad, límites y riesgo
+  TS->>DB: RECEIVED + clave idempotente
+  alt Transferencia propia
+    TS->>Core: Comando idempotente
+    Core-->>TS: POSTED o rechazo final
+  else Transferencia interbancaria
+    TS->>Core: Reservar/debitar según contrato
+    TS->>Rail: Solicitar pago con referencia externa
+    Rail-->>TS: Aceptado, rechazado o pendiente
+    Note over TS,Rail: Timeout conserva PENDING; consultar estado, no repetir ciegamente
+  end
+  TS->>DB: Estado + Outbox en misma transacción
+  DB-->>TS: Commit
+  TS-->>Ch: Referencia + estado explícito
+  DB->>SB: Relay Outbox; entrega al menos una vez
+  SB->>N: Evento versionado TransactionPosted
+  N->>N: Deduplicar eventId; guardar bandeja y preferencias
+  N-->>C: Push y Email/SMS según política

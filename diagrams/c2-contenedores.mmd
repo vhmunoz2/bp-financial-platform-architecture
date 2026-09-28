@@ -1,0 +1,66 @@
+flowchart TB
+  user["Cliente"]
+  subgraph azure["Azure | Red privada por zonas de disponibilidad"]
+    afd["Front Door + WAF + DDoS<br/>TLS, bot/rate protection"]
+    spa["Angular SPA<br/>Static Web Apps / Storage + CDN"]
+    mobile["React Native App<br/>iOS / Android; system browser"]
+    apim["API Management<br/>JWT, quotas, routing, correlation"]
+    webbff["Web BFF<br/>OIDC confidential client, session cookie"]
+    mobbff["Mobile BFF / API<br/>Token audience + channel contract"]
+    subgraph compute["Domain services | Container Apps initially; AKS when justified"]
+      profile["Perfil y datos del cliente<br/>Core + fuente de detalle; Cache-Aside con TTL<br/>BIAN: Customer Profile / Party Reference Data Directory"]
+      onboard["Onboarding y ciclo de vida<br/>Estado de alta; KYC, facial/liveness, CIAM y Core<br/>BIAN: Party Lifecycle Management"]
+      history["Consulta de movimientos<br/>Historial paginado; Core autoritativo + proyección fresca<br/>BIAN: Current Account / Position Keeping"]
+      position["Posición consolidada del cliente<br/>Agrega saldos/productos; no contabiliza<br/>BIAN: Customer Position"]
+      transfer["Pagos y transferencias<br/>Propias e interbancarias; idempotencia + Saga<br/>BIAN: Payment Order Initiation / Transaction Authorization / Payment Execution"]
+      notify["Orquestación de notificaciones<br/>Preferencias, plantillas, Push y Email/SMS; estado/reintentos"]
+      audit["Exportación de auditoría<br/>Consumo idempotente; minimización de PII; evidencia inmutable"]
+      adapter["Adaptadores de integración (ACL)<br/>Core, fuente de detalle y riel; traducción de contratos + mTLS"]
+    end
+    pg["PostgreSQL Flexible Server HA<br/>Per-domain schemas/DB + Outbox"]
+    redis["Azure Managed Redis<br/>Allowlisted cache only"]
+    bus["Azure Service Bus Premium<br/>Queues, topics, DLQ"]
+    blob["Blob Storage immutable policy<br/>Audit evidence / retention lock"]
+    kv["Key Vault + Managed Identity<br/>Secrets, keys, certs"]
+    obs["Azure Monitor + App Insights<br/>OTel, logs, metrics, alerts"]
+    idp["Entra External ID / CIAM<br/>OIDC, MFA, passkey policy"]
+  end
+  core["BP Core"]
+  detail["Customer Detail / KYC"]
+  rail["Payment Network"]
+  providers["FCM/APNs + Email/SMS"]
+  user -->|HTTPS| afd
+  afd --> spa
+  afd --> apim
+  user -->|HTTPS| mobile
+  spa -->|OIDC redirect| idp
+  mobile -->|System browser + PKCE| idp
+  apim --> webbff
+  apim --> mobbff
+  webbff --> profile
+  webbff --> history
+  webbff --> position
+  webbff --> transfer
+  mobbff --> onboard
+  mobbff --> transfer
+  profile --> adapter
+  onboard --> adapter
+  history --> adapter
+  transfer --> adapter
+  adapter -->|mTLS/OAuth2, private link/VPN| core
+  adapter -->|mTLS/API private| detail
+  adapter -->|mTLS + signed callback| rail
+  profile --> redis
+  history --> pg
+  transfer --> pg
+  onboard --> pg
+  notify --> pg
+  transfer -->|Outbox relay| bus
+  history -->|Outbox relay| bus
+  bus --> notify
+  bus --> audit
+  audit --> blob
+  notify --> providers
+  kv -. identity/keys .-> compute
+  compute -. telemetry .-> obs
+  apim -. telemetry .-> obs

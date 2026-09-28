@@ -1,0 +1,31 @@
+flowchart TB
+  internet["Internet / Mobile"] --> afd["Azure Front Door Premium<br/>WAF + DDoS + health probes"]
+  afd --> region1
+  afd -. failover .-> region2
+  subgraph region1["Región primaria - zonas A/B/C"]
+    apim1["APIM multi-zone"]
+    app1["Container Apps / AKS<br/>minimum replicas + HPA"]
+    pg1["PostgreSQL HA<br/>zone redundant + PITR"]
+    sb1["Service Bus Premium<br/>zone redundant"]
+    cache1["Redis HA"]
+  end
+  subgraph region2["Región DR - warm standby"]
+    apim2["APIM standby / DR unit"]
+    app2["Scale-to-ready apps<br/>IaC redeploy"]
+    pg2["Geo backup / read replica<br/>promote under runbook"]
+    sb2["Geo-recovery / replicated messages"]
+    cache2["Cache cold; rebuild from sources"]
+  end
+  pg1 -. asynchronous replication .-> pg2
+  sb1 -. geo replication/config backup .-> sb2
+  vault["Key Vault geo-redundant + key backup policy"]
+  logs["Azure Monitor / Log Analytics<br/>alerts, traces, SLO dashboards"]
+  immutable["Immutable audit archive<br/>separate subscription/RBAC"]
+  ops["On-call + incident command<br/>tested runbooks and failback"]
+  app1 -. metrics .-> logs
+  app2 -. metrics .-> logs
+  app1 -. managed identity .-> vault
+  app1 --> immutable
+  logs --> ops
+  rto["Initial targets (validate by BIA):\nRTO <= 60 min | RPO <= 5 min channel state\nCore ledger follows Core SLA; reconcile before reopen"]
+  region2 -.-> rto
