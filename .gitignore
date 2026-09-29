@@ -1,0 +1,5 @@
+# Scripts auxiliares locales
+/scripts/
+
+# Temporales, renders y archivos de trabajo
+/tmp/
